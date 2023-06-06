@@ -15,12 +15,13 @@ USE process_remap_module, ONLY: basin2reach
 ! subroutines: basin routing
 USE basinUH_module, ONLY: IRF_route_basin    ! perform UH convolution for basin routing
 ! subroutines: river routing
+USE network_route,       ONLY: route_network !
 USE accum_runoff_module, ONLY: accum_runoff  ! upstream flow accumulation
 USE irf_route_module,    ONLY: irf_route     ! unit hydrograph (impulse response function) routing method
-USE kwt_route_module,    ONLY: kwt_route     ! lagrangian kinematic wave routing method
-USE kw_route_module,     ONLY: kw_route      ! kinematic wave routing method
-USE mc_route_module,     ONLY: mc_route      ! muskingum-cunge routing method
-USE dfw_route_module,    ONLY: dfw_route     ! diffusive wave routing method
+USE kwt_route_module,    ONLY: qroute_rch    ! lagrangian kinematic wave routing method
+USE kw_route_module,     ONLY: kw_rch        ! kinematic wave routing method
+USE mc_route_module,     ONLY: mc_rch        ! muskingum-cunge routing method
+USE dfw_route_module,    ONLY: dfw_rch       ! diffusive wave routing method
 
 implicit none
 
@@ -204,16 +205,17 @@ CONTAINS
    endif
 
    if (onRoute(kinematicWaveTracking)) then
-     call kwt_route(iens,                 & ! input: ensemble index
-                    river_basin,          & ! input: river basin data type
-                    T0,T1,                & ! input: start and end of the time step
-                    ixDesire,             & ! input: index of verbose reach
-                    NETOPO_in,            & ! input: reach topology data structure
-                    RPARAM_in,            & ! input: reach parameter data structure
-                    RCHSTA_out,           & ! inout: reach state data structure
-                    RCHFLX_out,           & ! inout: reach flux data structure
-                    ierr,cmessage,        & ! output: error control
-                    ixRchProcessed)         ! optional input: indices of reach to be routed
+     call route_network(qroute_rch,           & ! input: kwt routing routine
+                        iens,                 & ! input: ensemble index
+                        river_basin,          & ! input: river basin data type
+                        T0,T1,                & ! input: start and end of the time step
+                        ixDesire,             & ! input: index of verbose reach
+                        NETOPO_in,            & ! input: reach topology data structure
+                        RPARAM_in,            & ! input: reach parameter data structure
+                        RCHSTA_out,           & ! inout: reach state data structure
+                        RCHFLX_out,           & ! inout: reach flux data structure
+                        ierr,cmessage,        & ! output: error control
+                        ixRchProcessed)         ! optional input: indices of reach to be routed
      if(ierr/=0)then; message=trim(message)//trim(cmessage); return; endif
    end if
 
@@ -230,44 +232,47 @@ CONTAINS
    end if
 
    if (onRoute(kinematicWave)) then
-     call kw_route(iens,                 & ! input: ensemble index
-                   river_basin,          & ! input: river basin data type
-                   T0,T1,                & ! input: start and end of the time step
-                   ixDesire,             & ! input: index of verbose reach
-                   NETOPO_in,            & ! input: reach topology data structure
-                   RPARAM_in,            & ! input: reach parameter data structure
-                   RCHSTA_out,           & ! inout: reach state data structure
-                   RCHFLX_out,           & ! inout: reach flux data structure
-                   ierr,cmessage,        & ! output: error control
-                   ixRchProcessed)         ! optional input: indices of reach to be routed
+     call route_network(kw_rch,               & ! input: kwe routing routine
+                        iens,                 & ! input: ensemble index
+                        river_basin,          & ! input: river basin data type
+                        T0,T1,                & ! input: start and end of the time step
+                        ixDesire,             & ! input: index of verbose reach
+                        NETOPO_in,            & ! input: reach topology data structure
+                        RPARAM_in,            & ! input: reach parameter data structure
+                        RCHSTA_out,           & ! inout: reach state data structure
+                        RCHFLX_out,           & ! inout: reach flux data structure
+                        ierr,cmessage,        & ! output: error control
+                        ixRchProcessed)         ! optional input: indices of reach to be routed
      if(ierr/=0)then; message=trim(message)//trim(cmessage); return; endif
    end if
 
    if (onRoute(muskingumCunge)) then
-     call mc_route(iens,                 & ! input: ensemble index
-                   river_basin,          & ! input: river basin data type
-                   T0,T1,                & ! input: start and end of the time step
-                   ixDesire,             & ! input: index of verbose reach
-                   NETOPO_in,            & ! input: reach topology data structure
-                   RPARAM_in,            & ! input: reach parameter data structure
-                   RCHSTA_out,           & ! inout: reach state data structure
-                   RCHFLX_out,           & ! inout: reach flux data structure
-                   ierr,cmessage,        & ! output: error control
-                   ixRchProcessed)         ! optional input: indices of reach to be routed
+     call route_network(mc_rch,               & ! input: dfw_routing routine
+                        iens,                 & ! input: ensemble index
+                        river_basin,          & ! input: river basin data type
+                        T0,T1,                & ! input: start and end of the time step
+                        ixDesire,             & ! input: index of verbose reach
+                        NETOPO_in,            & ! input: reach topology data structure
+                        RPARAM_in,            & ! input: reach parameter data structure
+                        RCHSTA_out,           & ! inout: reach state data structure
+                        RCHFLX_out,           & ! inout: reach flux data structure
+                        ierr,cmessage,        & ! output: error control
+                        ixRchProcessed)         ! optional input: indices of reach to be routed
      if(ierr/=0)then; message=trim(message)//trim(cmessage); return; endif
    end if
 
    if (onRoute(diffusiveWave)) then
-     call dfw_route(iens,                 & ! input: ensemble index
-                    river_basin,          & ! input: river basin data type
-                    T0,T1,                & ! input: start and end of the time step
-                    ixDesire,             & ! input: index of verbose reach
-                    NETOPO_in,            & ! input: reach topology data structure
-                    RPARAM_in,            & ! input: reach parameter data structure
-                    RCHSTA_out,           & ! inout: reach state data structure
-                    RCHFLX_out,           & ! inout: reach flux data structure
-                    ierr,cmessage,        & ! output: error control
-                    ixRchProcessed)         ! optional input: indices of reach to be routed
+     call route_network(dfw_rch,              & ! input: dfw routing routine
+                        iens,                 & ! input: ensemble index
+                        river_basin,          & ! input: river basin data type
+                        T0,T1,                & ! input: start and end of the time step
+                        ixDesire,             & ! input: index of verbose reach
+                        NETOPO_in,            & ! input: reach topology data structure
+                        RPARAM_in,            & ! input: reach parameter data structure
+                        RCHSTA_out,           & ! inout: reach state data structure
+                        RCHFLX_out,           & ! inout: reach flux data structure
+                        ierr,cmessage,        & ! output: error control
+                        ixRchProcessed)         ! optional input: indices of reach to be routed
      if(ierr/=0)then; message=trim(message)//trim(cmessage); return; endif
    end if
 

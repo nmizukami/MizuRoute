@@ -8,7 +8,6 @@ USE dataTypes, ONLY: STRSTA            ! states in each reach
 USE dataTypes, ONLY: RCHTOPO           ! Network topology
 USE dataTypes, ONLY: RCHPRP            ! Reach parameter
 USE dataTypes, ONLY: kwtRCH            ! kwt specific state data structure
-USE dataTypes, ONLY: subbasin_omp      ! mainstem+tributary data strucuture
 ! global data
 USE public_var, ONLY: iulog            ! i/o logical unit number
 USE public_var, ONLY: verySmall        ! a very small value
@@ -17,120 +16,16 @@ USE public_var, ONLY: integerMissing   ! missing value for integer number
 USE globalData, ONLY: idxKWT           ! index of KWT method
 ! utilities
 USE nr_utils,   ONLY: arth      ! Num. Recipies utilities
-! subroutines: general
-USE perf_mod,  ONLY: t_startf,t_stopf  ! timing start/stop
-USE model_utils, ONLY: handle_err
 
 implicit none
 
 private
-public::kwt_route
+public::qroute_rch
+
+integer(i4b) :: LAKEFLAG=0  ! >0 if processing lakes
+integer(i4b) :: RetroStep=0 ! retrospective time step offset (what is this for?? used for optional input)
 
 CONTAINS
-
- ! *********************************************************************
- ! subroutine: route kinematic waves through the river network
- ! *********************************************************************
- SUBROUTINE kwt_route(iens,                 & ! input: ensemble index
-                      river_basin,          & ! input: river basin information (mainstem, tributary outlet etc.)
-                      T0,T1,                & ! input: start and end of the time step
-                      ixDesire,             & ! input: reachID to be checked by on-screen pringing
-                      NETOPO_in,            & ! input: reach topology data structure
-                      RPARAM_in,            & ! input: reach parameter data structure
-                      RCHSTA_out,           & ! inout: reach state data structure
-                      RCHFLX_out,           & ! inout: reach flux data structure
-                      ierr,message,         & ! output: error control
-                      ixSubRch)               ! optional input: subset of reach indices to be processed
-
-   implicit none
-   ! Argument variables
-   integer(i4b),       intent(in)                 :: iEns                 ! ensemble member
-   type(subbasin_omp), intent(in),    allocatable :: river_basin(:)       ! river basin information (mainstem, tributary outlet etc.)
-   real(dp),           intent(in)                 :: T0,T1                ! start and end of the time step (seconds)
-   integer(i4b),       intent(in)                 :: ixDesire             ! index of the reach for verbose output
-   type(RCHTOPO),      intent(in),    allocatable :: NETOPO_in(:)         ! River Network topology
-   type(RCHPRP),       intent(in),    allocatable :: RPARAM_in(:)         ! River reach parameter
-   type(STRSTA),       intent(inout)              :: RCHSTA_out(:,:)      ! reach state data
-   type(STRFLX),       intent(inout)              :: RCHFLX_out(:,:)      ! Reach fluxes (ensembles, space [reaches]) for decomposed domains
-   integer(i4b),       intent(out)                :: ierr                 ! error code
-   character(*),       intent(out)                :: message              ! error message
-   integer(i4b),       intent(in), optional       :: ixSubRch(:)          ! subset of reach indices to be processed
-   ! local variables
-   character(len=strLen)                          :: cmessage             ! error message for downwind routine
-   logical(lgt),                      allocatable :: doRoute(:)           ! logical to indicate which reaches are processed
-   integer(i4b)                                   :: LAKEFLAG=0           ! >0 if processing lakes
-   integer(i4b)                                   :: nOrder               ! number of stream order
-   integer(i4b)                                   :: nTrib                ! number of tributary basins
-   integer(i4b)                                   :: nSeg                 ! number of reaches in the network
-   integer(i4b)                                   :: iSeg, jSeg           ! loop indices - reach
-   integer(i4b)                                   :: iTrib                ! loop indices - branch
-   integer(i4b)                                   :: ix                   ! loop indices stream order
-
-   ierr=0; message='kwt_route/'
-
-   ! number of reach check
-   if (size(NETOPO_in)/=size(RCHFLX_out(iens,:))) then
-    ierr=20; message=trim(message)//'sizes of NETOPO and RCHFLX mismatch'; return
-   endif
-
-   nSeg = size(RCHFLX_out(iens,:))
-
-   allocate(doRoute(nSeg), stat=ierr)
-   if(ierr/=0)then; message=trim(message)//'problem allocating space for [doRoute]'; return; endif
-
-   if (present(ixSubRch))then
-    doRoute(:)=.false.
-    doRoute(ixSubRch) = .true. ! only subset of reaches are on
-   else
-    doRoute(:)=.true. ! every reach is on
-   endif
-
-   nOrder = size(river_basin)
-
-   call t_startf('route/kwt')
-
-   ! route kinematic waves through the river network
-   do ix = 1, nOrder
-
-     nTrib=size(river_basin(ix)%branch)
-
-!$OMP PARALLEL DO schedule(dynamic,1)                   & ! chunk size of 1
-!$OMP          private(jSeg, iSeg)                      & ! private for a given thread
-!$OMP          private(ierr, cmessage)                  & ! private for a given thread
-!$OMP          shared(T0,T1)                            & ! private for a given thread
-!$OMP          shared(LAKEFLAG)                         & ! private for a given thread
-!$OMP          shared(river_basin)                      & ! data structure shared
-!$OMP          shared(doRoute)                          & ! data array shared
-!$OMP          shared(NETOPO_in)                        & ! data structure shared
-!$OMP          shared(RPARAM_in)                        & ! data structure shared
-!$OMP          shared(RCHSTA_out)                       & ! data structure shared
-!$OMP          shared(RCHFLX_out)                       & ! data structure shared
-!$OMP          shared(ix, iEns, ixDesire)               & ! indices shared
-!$OMP          firstprivate(nTrib)
-     trib:do iTrib = 1,nTrib
-       seg:do iSeg=1,river_basin(ix)%branch(iTrib)%nRch
-         jSeg  = river_basin(ix)%branch(iTrib)%segIndex(iSeg)
-         if (.not. doRoute(jSeg)) cycle
-         call qroute_rch(iEns,jSeg,           & ! input: array indices
-                         ixDesire,            & ! input: index of verbose reach
-                         T0,T1,               & ! input: start and end of the time step
-                         LAKEFLAG,            & ! input: flag if lakes are to be processed
-                         NETOPO_in,           & ! input: reach topology data structure
-                         RPARAM_in,           & ! input: reach parameter data structure
-                         RCHSTA_out,          & ! inout: reach state data structure
-                         RCHFLX_out,          & ! inout: reach flux data structure
-                         ierr,cmessage)         ! output: error control
-         if(ierr/=0) call handle_err(ierr, trim(message)//trim(cmessage))
-       end do seg
-     end do trib
-!$OMP END PARALLEL DO
-
-   end do ! basin loop
-
-   call t_stopf('route/kwt')
-
- END SUBROUTINE kwt_route
-
 
  ! *********************************************************************
  ! subroutine: route kinematic waves at one segment
@@ -138,13 +33,11 @@ CONTAINS
  SUBROUTINE qroute_rch(IENS,JRCH,    & ! input: array indices
                        ixDesire,     & ! input: index of the reach for verbose output
                        T0,T1,        & ! input: start and end of the time step
-                       LAKEFLAG,     & ! input: flag if lakes are to be processed
                        NETOPO_in,    & ! input: reach topology data structure
                        RPARAM_in,    & ! input: reach parameter data structure
                        RCHSTA_out,   & ! inout: reach state data structure
                        RCHFLX_out,   & ! inout: reach flux data structure
-                       ierr,message, & ! output: error control
-                       RSTEP)          ! optional input: retrospective time step offset
+                       ierr,message)   ! output: error control
  USE public_var, ONLY: MAXQPAR         ! maximum number of waves per reach
  USE public_var, ONLY: is_flux_wm      ! logical whether or not water management (abstract/injection) is on
  ! ----------------------------------------------------------------------------------------
@@ -202,10 +95,8 @@ CONTAINS
    integer(i4b), intent(in)                    :: JRCH          ! reach to process
    integer(i4b), intent(in)                    :: ixDesire      ! index of the reach for verbose output
    real(dp),     intent(in)                    :: T0,T1         ! start and end of the time step (seconds)
-   integer(i4b), intent(in)                    :: LAKEFLAG      ! >0 if processing lakes
    type(RCHTOPO),intent(in),    allocatable    :: NETOPO_in(:)  ! River Network topology
    type(RCHPRP), intent(in),    allocatable    :: RPARAM_in(:)  ! River reach parameter
-   integer(i4b), intent(in), optional          :: RSTEP         ! retrospective time step offset
    type(STRSTA), intent(inout)                 :: RCHSTA_out(:,:) ! reach state data
    type(STRFLX), intent(inout)                 :: RCHFLX_out(:,:) ! Reach fluxes (ensembles, space [reaches]) for decomposed domains
    integer(i4b), intent(out)                   :: ierr          ! error code
@@ -258,7 +149,7 @@ CONTAINS
                       NETOPO_in,RPARAM_in,RCHFLX_out,    & ! input
                       RCHSTA_out,                        & ! inout
                       Q_JRCH,TENTRY,T_EXIT,ierr,cmessage,& ! output
-                      RSTEP)                               ! optional input
+                      RetroStep)                           ! optional input
       if(ierr/=0)then; message=trim(message)//trim(cmessage); return; endif
 
       if (minval(Q_JRCH).lt.0.0_dp) then
@@ -305,11 +196,7 @@ CONTAINS
     ! (x) Water use - take out (Qtake is negative)
     ! ----------------------------------------------------------------------------------------
     ! set the retrospective offset
-    if (.not.present(RSTEP)) then
-      ROFFSET = 0
-    else
-      ROFFSET = RSTEP
-    endif
+    ROFFSET = RetroStep
     ! set time boundaries
     T_START = T0 - (T1 - T0)*ROFFSET
     T_END   = T1 - (T1 - T0)*ROFFSET
