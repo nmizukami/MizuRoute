@@ -174,7 +174,7 @@ implicit none
    real(dp)                 , allocatable  :: basinRunoff(:)  ! remapped river network catchment runoff [depth/time] (size: number of nHRU)
    real(dp)                 , allocatable  :: basinEvapo(:)   ! remapped river network catchment evaporation [depth/time] (size: number of nHRU)
    real(dp)                 , allocatable  :: basinPrecip(:)  ! remapped river network catchment precipitation [depth/time] (size: number of nHRU)
-   real(dp)                 , allocatable  :: basinCC(:)      ! remapped river network catchment Consituent [mass] (size: number of nHRU)
+   real(dp)                 , allocatable  :: basinCC(:)      ! remapped river network catchment constituent [mass] (size: number of nHRU)
  end type runoff
 
  type, public, extends(inputData) :: wm  ! water-management
@@ -361,8 +361,8 @@ implicit none
    real(dp)              :: REACH_VOL(0:1)           ! water volume at previous and current time steps [m3]
    real(dp)              :: REACH_WM_FLUX_actual     ! water management fluxes to and from each reach [m3/s]
    real(dp)              :: WB                       ! reach water balance error [m3]
-   real(dp),allocatable  :: reach_cc(:)              ! consituents concentration at the end of reach [g/m3]
-   real(dp),allocatable  :: reach_mass(:,:)          ! consituent mass[g]. 1st dim 0:1(prev and current time), 2nd dim: a number of consituents
+   real(dp),allocatable  :: reach_cc(:)              ! constituent concentration at the end of reach [g/m3]
+   real(dp),allocatable  :: reach_mass(:,:)          ! constituent mass[g]. 1st dim 0:1(prev and current time), 2nd dim: a number of constituents
  end type hydraulic
 
  ! fluxes and states in each reach
